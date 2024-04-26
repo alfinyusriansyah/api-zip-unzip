@@ -60,26 +60,25 @@ def zip_files():
  
 @app.route('/unzip', methods=['POST'])
 def unzip_file():
-    # Check if the request contains a file
-    if 'file' not in request.files:
-        return jsonify({'error': 'No file found in the request'}), 400
-   
-    zip_file = request.files['file']
-   
-    # Save the zip file to a temporary location
-    temp_zip_path = os.path.join('temp_zip', zip_file.filename)
-    zip_file.save(temp_zip_path)
-   
-    # Extract the zip file to user/dataupload folder
-    extract_path = 'folderhasil'
-    os.makedirs(extract_path, exist_ok=True)
-    with zipfile.ZipFile(temp_zip_path, 'r') as zip_ref:
-        zip_ref.extractall(extract_path)
-   
-    # Clean up temporary zip file
-    os.remove(temp_zip_path)
-   
-    return jsonify({'message': f'Zip file "{zip_file.filename}" has been successfully extracted to "{extract_path}"'})
+    # Check if the request contains a list of file paths
+    if 'files' not in request.json or not isinstance(request.json['files'], list):
+        return jsonify({'error': 'No list of file paths found in the request or the list is empty'}), 400
+
+    # Extract each zip file
+    for file_path in request.json['files']:
+        print(file_path)
+        # Verify if the file exists
+        if not os.path.exists(file_path):
+            return jsonify({'error': f'File not found: {file_path}'}), 404
+        
+        # Extract the zip file
+        zip_filename = os.path.basename(file_path)
+        extract_path = os.path.join('folderhasilunzip', os.path.splitext(zip_filename)[0])
+        os.makedirs(extract_path, exist_ok=True)
+        with zipfile.ZipFile(file_path, 'r') as zip_ref:
+            zip_ref.extractall(extract_path)
+
+    return jsonify({'message': f'Zip files have been successfully extracted to "{file_path}"'})
 
 
 @app.route('/download/<path:filename>', methods=['GET'])

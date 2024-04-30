@@ -12,14 +12,10 @@ Download beberapa file, lalu konvert menjadi zip file (Post)
 }
 
 ```
-Download zip di browser : localhost/download/path_file_zip
+Click hasil response 
 
-Unzip file zip (Post) 
 ```
 {
-    "files": [
-        "link_path_file_zip_1",
-        "link_path_file_zip_2",
-        "link_path_file_zip_3"
-        ]
+    "download_link" : http//domain.com/urls=link_1&urls=link_2
 }
+````

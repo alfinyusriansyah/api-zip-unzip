@@ -4,8 +4,10 @@ import zipfile
 import os
 from urllib.parse import urlparse
 import shutil
-
-#cel
+from urllib.parse import unquote
+from datetime import datetime
+from datetime import datetime as dt
+ 
 app = Flask(__name__)
  
 def download_file(url, dest_folder):
@@ -24,8 +26,16 @@ def download_file(url, dest_folder):
     else:
         return None
  
+def clear_userzip_folder():
+    userzip_folder = 'userzip'
+    if os.path.exists(userzip_folder):
+        shutil.rmtree(userzip_folder)
+    os.makedirs(userzip_folder, exist_ok=True)
+   
 @app.route('/zip', methods=['POST'])
 def zip_files():
+    clear_userzip_folder()
+   
     # Check if the request contains JSON data
     if not request.is_json:
         return jsonify({'error': 'Request data must be in JSON format'}), 400
@@ -34,58 +44,61 @@ def zip_files():
     json_data = request.json
     file_urls = json_data.get('files', [])
    
-    # Create a temporary directory to store the downloaded files
-    temp_dir = 'temp_zip'
-    os.makedirs(temp_dir, exist_ok=True)
+    # Generate download link
+    download_link = request.url_root + 'download?urls=' + '&urls='.join(file_urls)
    
-    # Download files from URLs and store them in the temporary directory
-    downloaded_files = []
-    for file_url in file_urls:
-        file_path = download_file(file_url, temp_dir)
-        if file_path:
-            downloaded_files.append(file_path)
-   
-    # Create a zip file
-    zip_file_name = 'zipped_files.zip'
-    with zipfile.ZipFile(zip_file_name, 'w') as zipf:
-        for file_path in downloaded_files:
-            file_name = os.path.basename(file_path)
-            zipf.write(file_path, file_name)
-   
-    # Clean up temporary directory
-    shutil.rmtree(temp_dir)
-   
-    # Return the relative path to the zip file
-    return jsonify({'download_link': zip_file_name})
+    # Return the download link
+    return jsonify({'download_link': download_link})
  
-@app.route('/unzip', methods=['POST'])
-def unzip_file():
-    # Check if the request contains a list of file paths
-    if 'files' not in request.json or not isinstance(request.json['files'], list):
-        return jsonify({'error': 'No list of file paths found in the request or the list is empty'}), 400
-
-    # Extract each zip file
-    for file_path in request.json['files']:
-        print(file_path)
-        # Verify if the file exists
-        if not os.path.exists(file_path):
-            return jsonify({'error': f'File not found: {file_path}'}), 404
-        
-        # Extract the zip file
-        zip_filename = os.path.basename(file_path)
-        extract_path = os.path.join('folderhasilunzip', os.path.splitext(zip_filename)[0])
-        os.makedirs(extract_path, exist_ok=True)
-        with zipfile.ZipFile(file_path, 'r') as zip_ref:
-            zip_ref.extractall(extract_path)
-
-    return jsonify({'message': f'Zip files have been successfully extracted to "{file_path}"'})
-
-
-@app.route('/download/<path:filename>', methods=['GET'])
-def download_file2(filename):
-    
-    return send_file(filename, as_attachment=True)
-
-
+ 
+@app.route('/download', methods=['GET'])
+def download_files():
+    clear_userzip_folder()
+    urls = request.args.getlist('urls')
+    if not urls:
+        return "Please provide 'urls' parameter in the query string", 400
+   
+    # Initialize a list to store file names
+    file_names = []
+   
+    try:
+        # Download each file from the provided URLs
+        for url in urls:
+            # Unquote the URL to handle special characters
+            url = unquote(url)
+           
+            # Send a GET request to the provided URL
+            response = requests.get(url)
+            if response.status_code != 200:
+                return f"Failed to download file from {url}. Status code: {response.status_code}", 500
+           
+            # Extract file name from URL
+            file_name = url.split('/')[-1].split('?')[0]
+           
+            # Save the file temporarily
+            with open(file_name, 'wb') as f:
+                f.write(response.content)
+           
+            # Add file name to the list
+            file_names.append(file_name)
+       
+        # Zip files into a single archive
+        c = dt.now()
+        zip_file_name = rf'userzip\downloaded_files_{c.strftime("%H_%M_%S")}.zip'
+        import zipfile
+        with zipfile.ZipFile(zip_file_name, 'w') as zipf:
+            for file in file_names:
+                zipf.write(file)
+ 
+        # Remove temporary files
+        for file in file_names:
+            os.remove(file)
+ 
+        # Send the zip file as a response
+        return send_file(zip_file_name, as_attachment=True)
+    except Exception as e:
+        return f"An error occurred: {str(e)}", 500
+ 
 if __name__ == '__main__':
     app.run(debug=True)
+ 
